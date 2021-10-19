@@ -1,5 +1,7 @@
 
 import axios from 'axios'
+import prismaClient from '../prisma'
+import { sign } from 'jsonwebtoken'
 /**
  * 1- receber o codigo via string
  * 2- recuperar o access token no github - token que o GH disponibiliza pra ter acesso as infos do user
@@ -47,8 +49,40 @@ class AuthenticateUserService {
       }
     })
 
+    const { login, id, avatar_url, name } = response.data
+
+    let user = await prismaClient.user.findFirst({
+      where: {
+        github_id: id
+      }
+    })
+
+    if (!user) {
+      await prismaClient.user.create({
+        data: {
+          github_id: id,
+          login,
+          avatar_url,
+          name
+        }
+      })
+    }
+
+    const token = sign({
+      user: {
+        name: user.name,
+        avatar_url: user.avatar_url,
+        id: user.id
+      }
+    },
+    process.env.JWT_SECRET, {
+      subject: user.id,
+      expiresIn: "1d"
+    }
+    )
+
     // quando a gente usa o axios, toda info que é retornada, é inserida no data
-    return response.data
+    return { token, user }
   }
 }
 
